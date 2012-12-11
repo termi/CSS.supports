@@ -1,4 +1,4 @@
-/** @license CSS.supports polyfill | @version 0.2 | MIT License | github.com/termi */
+/** @license CSS.supports polyfill | @version 0.3 | MIT License | github.com/termi */
 
 // ==ClosureCompiler==
 // @compilation_level ADVANCED_OPTIMIZATIONS
@@ -79,12 +79,12 @@ void function() {
 	}
 
 	// _supportsCondition("(a:b) or (display:block) or (display:none) and (display:block1)")
-	function _supportsCondition(supports_condition) {
-		if(!supports_condition) {
+	function _supportsCondition(str) {
+		if(!str) {
 			_supportsCondition.throwSyntaxError();
 		}
 
-		supports_condition = _supportsCondition.normaliseMediaString(supports_condition + "");
+		str = _supportsCondition.normaliseMediaString(str + "");
 
 
 		/** @enum {number} @const */
@@ -102,14 +102,17 @@ void function() {
 			, chain
 			, result
 			, valid = true
-			, LOCAL_RE_CHAINS = /\S+/g // this RegExp must be new every time
 			, isNot
+			, start
 			, currentPropertyName
 			, expectedPropertyValue
 			, passThisGroup
 			, nextRuleCanBe = 
 				RMAP.NOT | RMAP.GROUP_START | RMAP.PROPERTY
 			, currentRule
+			, i = -1
+			, newI
+			, len = str.length
 		;
 
 		resultsStack.push(void 0);
@@ -120,8 +123,46 @@ void function() {
 		function _setResult(val) {
 			result = resultsStack[ resultsStack.length - 1 ] = val;
 		}
+		function _checkNext(that, notThat, __i, cssValue) {
+			newI = __i || i;
 
-		while(chain = LOCAL_RE_CHAINS.exec(supports_condition)) {
+			var chr
+				, isQuited
+				, isUrl
+				, special
+			;
+
+			if(cssValue)newI--;
+
+			do {
+				chr = str.charAt(++newI);
+
+				if(cssValue) {
+					special = chr && (isQuited || isUrl);
+					if(chr == "'" || chr == "\"") {
+						special = (isQuited = !isQuited);
+					}
+					else if(!isQuited) {
+						if(!isUrl && chr == "(") {
+							// TODO:: in Chrome: $0.style.background = "url('http://asd))')"; $0.style.background == "url(http://asd%29%29/)"
+							isUrl = true;
+							special = true;
+						}
+						else if(isUrl && chr == ")") {
+							isUrl = false;
+							special = true;
+						}
+					}
+				}
+			}
+			while(special || (chr && (!that || chr != that) && (!notThat || chr == notThat)));
+
+			if(that == null || chr == that) {
+				return newI;
+			}
+		}
+
+		while(++i < len) {
 			if(currentRule == RMAP.NOT) {
 				nextRuleCanBe = RMAP.GROUP_START | RMAP.PROPERTY;
 			}
@@ -134,19 +175,49 @@ void function() {
 			else if(currentRule == RMAP.VALUE) {
 				nextRuleCanBe = RMAP.GROUP_END | RMAP.GROUP_START | RMAP.NOT | RMAP.OR | RMAP.AND;
 			}
-			else if(currentRule == RMAP.PROPERTY) { // TODO:: supportsCondition_rules.PROPERTY -> supportsCondition_rules.PROPERTY_and_VALUE
-				nextRuleCanBe = RMAP.GROUP_END | RMAP.GROUP_START | RMAP.NOT | RMAP.OR | RMAP.AND;
+			else if(currentRule == RMAP.PROPERTY) {
+				nextRuleCanBe = RMAP.VALUE;
 			}
 
-			chain = chain && chain[0] || "";
+			chain = str.charAt(i);
 
-			if(chain === "not")currentRule = RMAP.NOT;
-			else if(chain === "and")currentRule = RMAP.AND;
-			else if(chain === "or")currentRule = RMAP.OR;
-			else if(chain === "(")currentRule = RMAP.GROUP_START;
-			else if(chain === ")")currentRule = RMAP.GROUP_END;
-			else if(chain.charAt(0) == "(")currentRule = RMAP.PROPERTY;
-			else if(chain.substr(-1) == ")")currentRule = RMAP.VALUE;
+			if(nextRuleCanBe & RMAP.NOT && chain == "n" && str.substr(i, 3) == "not") {
+				currentRule = RMAP.NOT;
+				i += 2;
+			}
+			else if(nextRuleCanBe & RMAP.AND && chain == "a" && str.substr(i, 3) == "and") {
+				currentRule = RMAP.AND;
+				i += 2;
+			}
+			else if(nextRuleCanBe & RMAP.OR && chain == "o" && str.substr(i, 2) == "or") {
+				currentRule = RMAP.OR;
+				i++;
+			}
+			else if(nextRuleCanBe & RMAP.GROUP_START && chain == "(" && _checkNext("(", " ")) {
+				i = newI - 1;
+				currentRule = RMAP.GROUP_START;
+			}
+			else if(nextRuleCanBe & RMAP.GROUP_END && chain == ")") {
+				currentRule = RMAP.GROUP_END;
+			}
+			else if(nextRuleCanBe & RMAP.PROPERTY && chain == "(" && (start = _checkNext(null, " ")) && _checkNext(":", null, start)) {
+				i = newI - 1;
+				currentPropertyName = str.substr(start, i - start + 1).trim();
+				start = 0;
+				currentRule = RMAP.PROPERTY;
+				expectedPropertyValue = null;
+				continue;
+			}
+			else if(nextRuleCanBe & RMAP.VALUE && (start = _checkNext(null, " ")) && _checkNext(")", null, start, true)) {
+				i = newI;
+				expectedPropertyValue = str.substr(start, i - start).trim();
+				start = 0;
+				currentRule = RMAP.VALUE;
+				chain = " ";
+			}
+			else if(chain == " ") {
+				continue;
+			}
 			else currentRule = 0;
 
 			if(!valid || !chain || !(currentRule & nextRuleCanBe)) {
@@ -205,40 +276,18 @@ void function() {
 
 				isNot = false;
 			}
-			else if( currentRule == RMAP.PROPERTY ) { // Property name
-				if(chain.substr(-1) == ":") {
-					currentPropertyName = chain.substr(1, chain.length - 2);
-
-					continue;
-				}
-				else if(chain.indexOf(":") != -1) {
-					result = chain.split(":"); // we can use 'result' variable here because we would overwrite it in next rule 'Property value'
-					currentPropertyName = result[0].substr(1);
-					chain = result[1]; // For 'Property value' check
-					if(chain.substr(-1) == ")") {
-						currentRule = RMAP.VALUE;
-					}
-					else {
-						valid = false;
-					}
-				}
-				else {
-					valid = false;
-				}
-			}
-
-			if( currentRule == RMAP.VALUE ) { // Property value
-				expectedPropertyValue = chain.substr(0, chain.length - 1);
+			else if( currentRule == RMAP.VALUE ) { // Property value
 				_setResult(_CSS_supports(currentPropertyName, expectedPropertyValue));
 				if(isNot)result = !result;
 
 				isNot = false;
+				expectedPropertyValue = currentPropertyName = null;
 			}
 
 			_setResult(result);
 		}
 
-		if(!valid) {
+		if(!valid || result === void 0) {
 			_supportsCondition.throwSyntaxError();
 		}
 
@@ -247,37 +296,10 @@ void function() {
 	_supportsCondition.throwSyntaxError = function() {
 		throw new Error("SYNTAX_ERR");
 	};
-	_supportsCondition.normaliseMediaString = function(
-		STR_RE_REDUNDANT_WHITESPACE
-		, RE_MORE_WHITESPACE
-		, STR_RE_MORE_WHITESPACE
-		, RE_GROUP_START
-		, STR_RE_GROUP_START
-		, RE_GROUP_END
-		, STR_RE_GROUP_END
-		, RE_CONDITIONS
-		, STR_RE_CONDITIONS
-		, str
-	) {
-		var RE_REDUNDANT_WHITESPACE = this;
-		return str
-			.replace(RE_REDUNDANT_WHITESPACE, STR_RE_REDUNDANT_WHITESPACE)
-			.replace(RE_MORE_WHITESPACE, STR_RE_MORE_WHITESPACE)
-			.replace(RE_GROUP_START, STR_RE_GROUP_START)
-			.replace(RE_GROUP_END, STR_RE_GROUP_END)
-			.replace(RE_CONDITIONS, STR_RE_CONDITIONS)
-	}.bind(
-		/\s*(:)\s*|(\()\s+(\S)|(\S)\s+(\))/g // RE_REDUNDANT_WHITESPACE
-		, "$1$2$3$4$5" // STR_RE_REDUNDANT_WHITESPACE
-		, /\s{2,}/g // RE_MORE_WHITESPACE
-		, " " // STR_RE_MORE_WHITESPACE
-		, /\(\(/g // RE_GROUP_START
-		, "( (" // STR_RE_GROUP_START
-		, /\)\)/g // RE_GROUP_END
-		, ") )" // STR_RE_GROUP_END
-		, /(\))\s*(not|and|or)\s*(\()?/ig // RE_CONDITIONS
-		, "$1 $2 $3" // STR_RE_CONDITIONS
-	);
+	_supportsCondition.normaliseMediaString = function(str) {
+		var RE_SPACES = this;
+		return str.replace(RE_SPACES, " ")
+	}.bind(/[\s\r\n]/g);
 
 
 	global["CSS"]["supports"] = function(a, b) {
