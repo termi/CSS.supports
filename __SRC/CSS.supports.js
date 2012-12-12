@@ -1,4 +1,4 @@
-/** @license CSS.supports polyfill | @version 0.3 | MIT License | github.com/termi */
+/** @license CSS.supports polyfill | @version 0.3 | MIT License | github.com/termi/CSS.supports */
 
 // ==ClosureCompiler==
 // @compilation_level ADVANCED_OPTIMIZATIONS
@@ -99,7 +99,7 @@ void function() {
 		};
 
 		var resultsStack = []
-			, chain
+			, chr
 			, result
 			, valid = true
 			, isNot
@@ -118,10 +118,14 @@ void function() {
 		resultsStack.push(void 0);
 
 		function _getResult() {
-			return resultsStack[ resultsStack.length - 1 ];
+			var l = resultsStack.length - 1;
+			if( l < 0 )valid = false;
+			return resultsStack[ l ];
 		}
 		function _setResult(val) {
-			result = resultsStack[ resultsStack.length - 1 ] = val;
+			var l = resultsStack.length - 1;
+			if( l < 0 )valid = false;
+			result = resultsStack[ l ] = val;
 		}
 		function _checkNext(that, notThat, __i, cssValue) {
 			newI = __i || i;
@@ -179,28 +183,28 @@ void function() {
 				nextRuleCanBe = RMAP.VALUE;
 			}
 
-			chain = str.charAt(i);
+			chr = str.charAt(i);
 
-			if(nextRuleCanBe & RMAP.NOT && chain == "n" && str.substr(i, 3) == "not") {
+			if(nextRuleCanBe & RMAP.NOT && chr == "n" && str.substr(i, 3) == "not") {
 				currentRule = RMAP.NOT;
 				i += 2;
 			}
-			else if(nextRuleCanBe & RMAP.AND && chain == "a" && str.substr(i, 3) == "and") {
+			else if(nextRuleCanBe & RMAP.AND && chr == "a" && str.substr(i, 3) == "and") {
 				currentRule = RMAP.AND;
 				i += 2;
 			}
-			else if(nextRuleCanBe & RMAP.OR && chain == "o" && str.substr(i, 2) == "or") {
+			else if(nextRuleCanBe & RMAP.OR && chr == "o" && str.substr(i, 2) == "or") {
 				currentRule = RMAP.OR;
 				i++;
 			}
-			else if(nextRuleCanBe & RMAP.GROUP_START && chain == "(" && _checkNext("(", " ")) {
+			else if(nextRuleCanBe & RMAP.GROUP_START && chr == "(" && _checkNext("(", " ")) {
 				i = newI - 1;
 				currentRule = RMAP.GROUP_START;
 			}
-			else if(nextRuleCanBe & RMAP.GROUP_END && chain == ")") {
+			else if(nextRuleCanBe & RMAP.GROUP_END && chr == ")" && resultsStack.length > 1) {
 				currentRule = RMAP.GROUP_END;
 			}
-			else if(nextRuleCanBe & RMAP.PROPERTY && chain == "(" && (start = _checkNext(null, " ")) && _checkNext(":", null, start)) {
+			else if(nextRuleCanBe & RMAP.PROPERTY && chr == "(" && (start = _checkNext(null, " ")) && _checkNext(":", null, start)) {
 				i = newI - 1;
 				currentPropertyName = str.substr(start, i - start + 1).trim();
 				start = 0;
@@ -213,14 +217,14 @@ void function() {
 				expectedPropertyValue = str.substr(start, i - start).trim();
 				start = 0;
 				currentRule = RMAP.VALUE;
-				chain = " ";
+				chr = " ";
 			}
-			else if(chain == " ") {
+			else if(chr == " ") {
 				continue;
 			}
 			else currentRule = 0;
 
-			if(!valid || !chain || !(currentRule & nextRuleCanBe)) {
+			if(!valid || !chr || !(currentRule & nextRuleCanBe)) {
 				_supportsCondition.throwSyntaxError();
 			}
 			valid = true;
@@ -272,7 +276,9 @@ void function() {
 				passThisGroup = false;
 
 				resultsStack.pop();
-				if( _getResult() !== void 0)result &= _getResult();
+				if( _getResult() !== void 0) {
+					result = !!(result & _getResult());
+				}
 
 				isNot = false;
 			}
@@ -287,7 +293,7 @@ void function() {
 			_setResult(result);
 		}
 
-		if(!valid || result === void 0) {
+		if(!valid || result === void 0 || resultsStack.length > 1) {
 			_supportsCondition.throwSyntaxError();
 		}
 
