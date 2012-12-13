@@ -1,4 +1,4 @@
-/** @license CSS.supports polyfill | @version 0.3 | MIT License | github.com/termi/CSS.supports */
+/** @license CSS.supports polyfill | @version 0.4 | MIT License | github.com/termi/CSS.supports */
 
 // ==ClosureCompiler==
 // @compilation_level ADVANCED_OPTIMIZATIONS
@@ -19,6 +19,8 @@ void function() {
 
 	var global = this
 		, _CSS_supports
+		, msie
+		, testElement
 	;
 
 	if(!global["CSS"]) {
@@ -54,19 +56,34 @@ void function() {
 		}
 	}
 	else {
-		// ---=== NO CSS.supports support ===---
-		_CSS_supports = function(__bind__fromCSSPropToCamel_replacer, __bind__testElementStyle, propertyName, propertyValue) {
-			var __bind__RE_FIRST_LETTER = this;
-			propertyName = (propertyName || "").replace(__bind__RE_FIRST_LETTER, __bind__fromCSSPropToCamel_replacer);
+		msie = "runtimeStyle" in document.documentElement;
+		testElement = global["document"].createElement("_");
 
-			var result = propertyName in __bind__testElementStyle;
+		// ---=== NO CSS.supports support ===---
+		_CSS_supports = function(ToCamel_replacer, testStyle, testElement, propertyName, propertyValue) {
+			/* TODO:: for IE < 9:
+			 _ = document.documentElement.appendChild(document.createElement("_"))
+			 _.currentStyle[propertyName] == propertyValue
+			*/
+			var __bind__RE_FIRST_LETTER = this;
+			propertyName = (propertyName || "").replace(__bind__RE_FIRST_LETTER, ToCamel_replacer);
+
+			var result = propertyName in testStyle;
 
 			if( result ) {
-				__bind__testElementStyle[propertyName] = propertyValue;
-				result = __bind__testElementStyle[propertyName] == propertyValue;
+				if( msie ) {
+					testStyle.cssText = "display:none;height:0;width:0;visibility:hidden;position:fixed;" + propertyName + ":" + propertyValue;
+					document.documentElement.appendChild(testElement);
+					result = testElement.currentStyle[propertyName] == propertyValue;
+					document.documentElement.removeChild(testElement);
+				}
+				else {
+					testStyle.cssText = propertyName + ":" + propertyValue;
+					result = testStyle[propertyName] == propertyValue;
+				}
 			}
 
-			__bind__testElementStyle.cssText = "";
+			testStyle.cssText = "";
 
 			return result;
 		}.bind(
@@ -74,7 +91,8 @@ void function() {
 			, function(a, b, c) { // __bind__fromCSSPropToCamel_replacer
 				return c.toUpperCase()
 			}
-			, global["document"].createElement("_").style // __bind__testElementStyle
+			, testElement.style // __bind__testElementStyle
+			, msie ? testElement : null
 		);
 	}
 
@@ -320,5 +338,5 @@ void function() {
 		return _CSS_supports(a, b);
 	};
 
-	global = null;// no need this any more
+	global = testElement = null;// no need this any more
 }.call(this);
