@@ -14,85 +14,144 @@ TODO::
 CSS.supporst("webkit-animation", "name") is true. Think this is wrong.
 */
 
-void function() {
+;(function() {
 	"use strict";
 
-	var global = this
+	var global = window
 		, _CSS_supports
 		, msie
 		, testElement
+		, prevResultsCache
+		, _CSS = global["CSS"]
 	;
 
-	if(!global["CSS"]) {
-		global["CSS"] = {};
+	if( !_CSS ) {
+		_CSS = global["CSS"] = {};
 	}
 
 	// ---=== HAS CSS.supports support ===---
-	_CSS_supports = global["CSS"]["supports"];
+	_CSS_supports = _CSS.supports;
 
 	// ---=== HAS supportsCSS support ===---
-	if(!_CSS_supports && global["supportsCSS"]) {// Opera 12.10 impl
-		_CSS_supports = global["CSS"]["supports"] = global["supportsCSS"];
-		if(global.__proto__) {
+	if( !_CSS_supports && global["supportsCSS"] ) {// Opera 12.10 impl
+		_CSS_supports = _CSS.supports = global["supportsCSS"].bind(global);
+		if( global.__proto__ ) {
 			delete global.__proto__["supportsCSS"];
 		}
 	}
 
 
 	if(typeof _CSS_supports === "function") {
-		if( !function() {
+		if( (function() {
 			// Test for support [supports condition](http://www.w3.org/TR/css3-conditional/#supportscondition)
 			try {
-				_CSS_supports.call(global, "(a:a)");
-				_CSS_supports = null;
+				_CSS_supports.call(_CSS, "(a:a)");
 				// SUCCESS
+				return !(global = _CSS_supports = null);//return true
 			}
-			catch(e) {
-				_CSS_supports = _CSS_supports.bind(global);
-				return true;//FAIL
+			catch(e) {//FAIL
+				//_CSS_supports = _CSS_supports.bind(global);
 			}
-		}.call(null) ) {
-			return;
+		})() ) {
+			// EXIT
+			return;// Do not need anything to do. Exit from polyfill
 		}
 	}
 	else {
+		// ---=== NO CSS.supports support ===---
+
 		msie = "runtimeStyle" in document.documentElement;
 		testElement = global["document"].createElement("_");
+		prevResultsCache = {};
 
-		// ---=== NO CSS.supports support ===---
 		_CSS_supports = function(ToCamel_replacer, testStyle, testElement, propertyName, propertyValue) {
+			var name_and_value = propertyName + "\\/" + propertyValue;
+			if( name_and_value in prevResultsCache ) {
+				return prevResultsCache[name_and_value];
+			}
+
 			/* TODO:: for IE < 9:
 			 _ = document.documentElement.appendChild(document.createElement("_"))
 			 _.currentStyle[propertyName] == propertyValue
 			*/
-			var __bind__RE_FIRST_LETTER = this;
-			propertyName = (propertyName || "").replace(__bind__RE_FIRST_LETTER, ToCamel_replacer);
+			var __bind__RE_FIRST_LETTER = this
+				, propertyName_CC = (propertyName + "").replace(__bind__RE_FIRST_LETTER, ToCamel_replacer)
+			;
 
-			var result = propertyName in testStyle;
+			var result = propertyName && propertyValue && (propertyName_CC in testStyle);
 
 			if( result ) {
+				/*if( msie ) {
+
+					try {
+						testElement.style[propertyName] = propertyValue;// IE throw here, if unsupported this syntax
+						testElement.style.cssText = "";
+					}
+					catch(e) {
+						result = false;
+					}
+
+					if( result ) {
+						testElement.id = uuid;
+						_document.body.appendChild(testElement);
+
+						if( (prevPropValue = testElement.currentStyle[propertyName]) != propertyValue ) {
+							_document.body.insertAdjacentHTML("beforeend", "<br style='display:none' id='" + uuid + "br'><style id='" + uuid + "style'>" +
+								"#" + uuid + "{display:none;height:0;width:0;visibility:hidden;position:absolute;position:fixed;" + propertyName + ":" + propertyValue + "}" +
+								"</style>");
+
+							if( !(propertyName in testElement.currentStyle) ) {
+								partOfCompoundPropName
+							}
+
+							if( /\(|\s/.test(propertyValue) ) {
+								currentPropValue = testElement.currentStyle[propertyName];
+								result = !!currentPropValue && currentPropValue != prevPropValue;
+							}
+							else {
+								result = testElement.currentStyle[propertyName] == propertyValue;
+							}
+							//_document.documentElement.removeChild(document.getElementById(uuid + "br"));
+							//_document.documentElement.removeChild(document.getElementById(uuid + "style"));
+						}
+
+						//_document.documentElement.removeChild(testElement);
+					}*/
+
 				if( msie ) {
-					testStyle.cssText = "display:none;height:0;width:0;visibility:hidden;position:fixed;" + propertyName + ":" + propertyValue;
-					document.documentElement.appendChild(testElement);
-					result = testElement.currentStyle[propertyName] == propertyValue;
-					document.documentElement.removeChild(testElement);
+					if( /\(|\s/.test(propertyValue) ) {
+						try {
+							testStyle[propertyName_CC] = propertyValue;
+							result = !!testStyle[propertyName_CC];
+						}
+						catch(e) {
+							result = false;
+						}
+					}
+					else {
+						testStyle.cssText = "display:none;height:0;width:0;visibility:hidden;position:absolute;position:fixed;" + propertyName + ":" + propertyValue;
+						document.documentElement.appendChild(testElement);
+						result = testElement.currentStyle[propertyName_CC] == propertyValue;
+						document.documentElement.removeChild(testElement);
+					}
 				}
 				else {
 					testStyle.cssText = propertyName + ":" + propertyValue;
-					result = testStyle[propertyName] == propertyValue;
+					result = testStyle[propertyName_CC];
+					result = result == propertyValue || result && testStyle.length > 0;
 				}
 			}
 
 			testStyle.cssText = "";
 
-			return result;
+			return prevResultsCache[name_and_value] = result;
 		}.bind(
 			/(-)([a-z])/g // __bind__RE_FIRST_LETTER
-			, function(a, b, c) { // __bind__fromCSSPropToCamel_replacer
+			, function(a, b, c) { // ToCamel_replacer
 				return c.toUpperCase()
 			}
-			, testElement.style // __bind__testElementStyle
-			, msie ? testElement : null
+			, testElement.style // testStyle
+			, msie ? testElement : null // testElement
 		);
 	}
 
@@ -101,9 +160,6 @@ void function() {
 		if(!str) {
 			_supportsCondition.throwSyntaxError();
 		}
-
-		str = _supportsCondition.normaliseMediaString(str + "");
-
 
 		/** @enum {number} @const */
 		var RMAP = {
@@ -140,11 +196,25 @@ void function() {
 			if( l < 0 )valid = false;
 			return resultsStack[ l ];
 		}
+
+		/**
+		 * @param {string=} val
+		 * @private
+		 */
 		function _setResult(val) {
 			var l = resultsStack.length - 1;
 			if( l < 0 )valid = false;
 			result = resultsStack[ l ] = val;
 		}
+
+		/**
+		 * @param {string?} that
+		 * @param {string?} notThat
+		 * @param {number=} __i
+		 * @param {boolean=} cssValue
+		 * @return {(number|undefined)}
+		 * @private
+		 */
 		function _checkNext(that, notThat, __i, cssValue) {
 			newI = __i || i;
 
@@ -154,7 +224,9 @@ void function() {
 				, special
 			;
 
-			if(cssValue)newI--;
+			if(cssValue) {
+				newI--;
+			}
 
 			do {
 				chr = str.charAt(++newI);
@@ -216,31 +288,33 @@ void function() {
 				i++;
 			}
 			else if(nextRuleCanBe & RMAP.GROUP_START && chr == "(" && _checkNext("(", " ")) {
-				i = newI - 1;
 				currentRule = RMAP.GROUP_START;
+				i = newI - 1;
 			}
 			else if(nextRuleCanBe & RMAP.GROUP_END && chr == ")" && resultsStack.length > 1) {
 				currentRule = RMAP.GROUP_END;
 			}
 			else if(nextRuleCanBe & RMAP.PROPERTY && chr == "(" && (start = _checkNext(null, " ")) && _checkNext(":", null, start)) {
+				currentRule = RMAP.PROPERTY;
 				i = newI - 1;
 				currentPropertyName = str.substr(start, i - start + 1).trim();
 				start = 0;
-				currentRule = RMAP.PROPERTY;
 				expectedPropertyValue = null;
 				continue;
 			}
 			else if(nextRuleCanBe & RMAP.VALUE && (start = _checkNext(null, " ")) && _checkNext(")", null, start, true)) {
+				currentRule = RMAP.VALUE;
 				i = newI;
 				expectedPropertyValue = str.substr(start, i - start).trim();
 				start = 0;
-				currentRule = RMAP.VALUE;
 				chr = " ";
 			}
 			else if(chr == " ") {
 				continue;
 			}
-			else currentRule = 0;
+			else {
+				currentRule = 0;
+			}
 
 			if(!valid || !chr || !(currentRule & nextRuleCanBe)) {
 				_supportsCondition.throwSyntaxError();
@@ -320,13 +394,11 @@ void function() {
 	_supportsCondition.throwSyntaxError = function() {
 		throw new Error("SYNTAX_ERR");
 	};
-	_supportsCondition.normaliseMediaString = function(str) {
-		var RE_SPACES = this;
-		return str.replace(RE_SPACES, " ")
-	}.bind(/[\s\r\n]/g);
 
-
-	global["CSS"]["supports"] = function(a, b) {
+	/**
+	 * @expose
+	 */
+	_CSS.supports = function(a, b) {
 		if(!arguments.length) {
 			throw new Error("WRONG_ARGUMENTS_ERR");//TODO:: DOMException ?
 		}
@@ -339,4 +411,4 @@ void function() {
 	};
 
 	global = testElement = null;// no need this any more
-}.call(this);
+})();
